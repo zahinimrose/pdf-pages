@@ -5,6 +5,7 @@
 
 #include "lexer.h"
 
+
 typedef std::vector<char> Data;
 typedef int Idx;
 
@@ -23,20 +24,22 @@ inline void consume_white_space(const Data& data, Idx& i) {
     while(is_white_space(data[i])) i++;
 }
 
-
-
 class Object {
     bool indirect;
-};
+    static unordered_map<int, Object>& table;
 
-class Data_object : public Object {
 public:
-    Data_object() = default;
-    Data data;
-    Data_object(Data data) : data(data) {};
+    virtual Data serialize() {};
+    
 };
 
-class Name_object: public Data_object {
+Object* direct_parse(const Data& data, Idx& i);
+
+class Reference : public Object {
+    int ref_no;
+};
+
+class Name_object: public Object {
 public:
     Name_object() = default;
     std::string name;
@@ -53,12 +56,12 @@ public:
             exit(1);
         }
         Name_object n;
-        n.data = tok;
         n.name = std::string(tok.begin() + 1, tok.end());
 
         return n;
 
     }
+    virtual Data serialize() {};
 
 };
 
@@ -69,13 +72,11 @@ template<> struct std::hash<Name_object> {
     }
 };
 
-class Ref_object: public Object {};
-
-class Array_object: public Ref_object {
+class Array_object: public Object {
     std::vector<Object> list;
 };
 
-class Dict_object : public Ref_object {
+class Dict_object : public Object {
 public:
     std::unordered_map<Name_object, Object> map;
 
@@ -90,15 +91,90 @@ public:
         Dict_object dict;
         tok = l.read_next_tok();
         while(!Lexer::equalsString(tok, ">>")) {
-            auto key = Name_object::parse(data, i);
-
+            Name_object key = Name_object::parse(data, i);
+            Object* o = direct_parse(data, i);
         }
 
         
     }
+
+    virtual Data serialize() {};
 };
 
-class Stream_object: public Ref_object {
+class Stream_object: public Object {
     Dict_object dict;
     Data data;
 };
+
+class String_object : public Object {
+public:
+    Data str;
+    static String_object parse(const Data& data, Idx& i) {
+        Lexer l(data, i);
+        auto tok = l.read_next_tok();
+        if(tok[0] !='(') {
+            cout << "Error: String object must start with ( " << (int)data[i] << "\n";
+            exit(1);
+        }
+        bool escape = false;
+        int left_parens = 1;
+        String_object str_obj;
+        str_obj.str.push_back('(');
+        while(left_parens > 0) {
+            str_obj.str.push_back(data[i]);
+            if(!escape) {
+                if(data[i] == '(') {
+                    left_parens++;
+                }
+                else if(data[i] == ')') {
+                    left_parens--;
+                }
+                else if(data[i] == '\\') {
+                    escape = true;
+                }
+            }
+            else {
+                escape = false;
+            }
+            i++;
+        }
+        cout<<"Hit " << data[i] << std::endl;
+        return str_obj;
+    }
+
+    Data serialize() {
+        return str;
+    }
+};
+
+Object* direct_parse(const Data& data, Idx& i) {
+        Lexer l(data, i);
+        auto tok = l.peek_next_tok();
+        if (Lexer::equalsString(tok, "<<")) {
+            Dict_object dict = Dict_object::parse(data, i);
+        }
+        else if(isdigit(tok[0])) {
+            cout << "Error: Not implemented";
+            exit(1);
+            // tok = l.read_next_tok();
+        }
+        else if(Lexer::equalsString(tok, "(")) {
+            String_object s = String_object::parse(data, i);
+            auto ret = new String_object;
+            *ret = s;
+            return ret;
+        }
+}
+
+Object* indirect_parse(const Data& data, Idx& i) {
+        Lexer l(data, i);
+        auto tok = l.read_next_tok();
+        int obj_num = stoi(Lexer::toString(tok));
+        tok = l.read_next_tok();
+        tok = l.read_next_tok();
+        if(!Lexer::equalsString(tok, "obj")) {
+            cout << "ERROR: Indirect reference must have obj";
+        }
+        return direct_parse(data, i);
+        
+    }
