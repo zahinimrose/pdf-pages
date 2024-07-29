@@ -29,7 +29,7 @@ class Object {
     static unordered_map<int, Object>& table;
 
 public:
-    virtual Data serialize() {};
+    virtual Data serialize() const {};
     
 };
 
@@ -61,7 +61,13 @@ public:
         return n;
 
     }
-    virtual Data serialize() {};
+    virtual Data serialize() const {
+        Data d;
+        d.push_back('/');
+        d.insert(d.end(), name.begin(), name.end());
+
+        return d;
+    };
 
 };
 
@@ -78,7 +84,7 @@ class Array_object: public Object {
 
 class Dict_object : public Object {
 public:
-    std::unordered_map<Name_object, Object> map;
+    std::unordered_map<Name_object, Object*> map;
 
     static Dict_object parse(const Data& data, Idx& i) {
         Lexer l(data, i);
@@ -89,16 +95,37 @@ public:
             exit(1);
         }
         Dict_object dict;
-        tok = l.read_next_tok();
+        tok = l.peek_next_tok();
         while(!Lexer::equalsString(tok, ">>")) {
             Name_object key = Name_object::parse(data, i);
             Object* o = direct_parse(data, i);
-        }
+            dict.map[key] = o;
 
-        
+            tok = l.peek_next_tok();
+        }
+        l.read_next_tok();
+
+        return dict;
     }
 
-    virtual Data serialize() {};
+    Data serialize() const {
+        Data d;
+        d.push_back('<');
+        d.push_back('<');
+        d.push_back('\n');
+        for(auto& e: map) {
+            auto key = e.first.serialize();
+            d.insert(d.end(), key.begin(), key.end());
+            d.push_back(' ');
+            auto value = e.second->serialize();
+            d.insert(d.end(), value.begin(), value.end());
+            d.push_back('\n');
+        }
+        d.push_back('>');
+        d.push_back('>');
+
+        return d;
+    };
 };
 
 class Stream_object: public Object {
@@ -138,11 +165,10 @@ public:
             }
             i++;
         }
-        cout<<"Hit " << data[i] << std::endl;
         return str_obj;
     }
 
-    Data serialize() {
+    Data serialize() const {
         return str;
     }
 };
@@ -152,6 +178,9 @@ Object* direct_parse(const Data& data, Idx& i) {
         auto tok = l.peek_next_tok();
         if (Lexer::equalsString(tok, "<<")) {
             Dict_object dict = Dict_object::parse(data, i);
+            auto ret = new Dict_object;
+            *ret = dict;
+            return ret;
         }
         else if(isdigit(tok[0])) {
             cout << "Error: Not implemented";
@@ -175,6 +204,11 @@ Object* indirect_parse(const Data& data, Idx& i) {
         if(!Lexer::equalsString(tok, "obj")) {
             cout << "ERROR: Indirect reference must have obj";
         }
-        return direct_parse(data, i);
-        
+        auto obj =  direct_parse(data, i);
+        tok = l.read_next_tok();
+        if(!Lexer::equalsString(tok, "endobj")) {
+            cout << "ERROR: Indirect reference must end with endobj";
+        }
+
+        return obj;
     }
