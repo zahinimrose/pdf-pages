@@ -229,7 +229,7 @@ public:
             std::cout << "Stream dict must have Length Field" <<std::endl;
         }
         int stream_length = stoi(Lexer::toString(dict.map[n]->serialize()));
-        cout << "Length: " << stream_length << std::endl;
+        // cout << "Length: " << stream_length << std::endl;
 
         Stream_object obj;
         obj.dict = dict;
@@ -249,7 +249,7 @@ public:
             i++;
         }
 
-        cout<< obj.data[0] << "\n";
+        // cout<< obj.data[0] << "\n";
         Lexer m(data, i);
         tok = m.read_next_tok();
 
@@ -320,25 +320,21 @@ public:
     }
 };
 
-class Num_object : public Object {
+class Single_object : public Object {
 public:
-    Data num;
-    static Num_object parse(const Data& data, Idx& i) {
+    Data data;
+    static Single_object parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
-        if(!isdigit(tok[0])) {
-            cout << "Not a numeric object" << std::endl;
-            exit(1);
-        }
 
-        Num_object num_obj;
-        num_obj.num = tok;
-        return num_obj;
+        Single_object obj;
+        obj.data = tok;
+        return obj;
     }
 
     Data serialize() const {
         
-        return num;
+        return data;
     }
 };
 
@@ -374,9 +370,9 @@ Object* direct_parse(const Data& data, Idx& i) {
                 return ret;
             }
             else {
-                Num_object num = Num_object::parse(data, i);
-                auto ret = new Num_object;
-                *ret = num;
+                Single_object obj = Single_object::parse(data, i);
+                auto ret = new Single_object;
+                *ret = obj;
 
                 return ret;
             }
@@ -397,6 +393,24 @@ Object* direct_parse(const Data& data, Idx& i) {
             Array_object arr = Array_object::parse(data, i);
             auto ret = new Array_object;
             *ret = arr;
+            return ret;
+        }
+        else if(Lexer::equalsString(tok, "true")) {
+            Single_object obj = Single_object::parse(data, i);
+            auto ret = new Single_object;
+            *ret = obj;
+            return ret;
+        }
+        else if(Lexer::equalsString(tok, "false")) {
+            Single_object obj = Single_object::parse(data, i);
+            auto ret = new Single_object;
+            *ret = obj;
+            return ret;
+        }
+        else if(tok[0] == '+' || tok[0] == '-') {
+            Single_object obj = Single_object::parse(data, i);
+            auto ret = new Single_object;
+            *ret = obj;
             return ret;
         }
 
@@ -430,5 +444,6 @@ void parse_indirect_objects(const Data& data, Idx& i) {
     auto tok = l.peek_next_tok();
     while(!Lexer::equalsString(tok, "xref")) {
         indirect_parse(data, i);
+        tok = l.peek_next_tok();
     }
 }
