@@ -116,6 +116,14 @@ public:
         cur_ptr = x;
         return d;
     }
+    
+    Data peek_next_next_tok() {
+        int x = cur_ptr;
+        Data d = read_next_tok();
+        d = read_next_tok();
+        cur_ptr = x;
+        return d;
+    }
 
 
 };
