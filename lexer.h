@@ -38,7 +38,7 @@ private:
 
     bool is_special() {
         char ch = curr_char();
-        const char special[] = {'<', '>', '(', ')'};
+        const char special[] = {'<', '>', '(', ')', '[', ']'};
         for(int i = 0; i < sizeof(special); i++) {
             if(ch == special[i]) {
                 return true;
@@ -99,6 +99,18 @@ public:
                 return tok;
                 break;
             }
+            case '[': {
+                cur_ptr++;
+                tok.push_back('[');
+                return tok;
+                break;
+            }
+            case ']': {
+                cur_ptr++;
+                tok.push_back(']');
+                return tok;
+                break;
+            }
             default: {
                 while(!is_white_space()  && !is_special()) {
                     tok.push_back(curr_char());
@@ -117,9 +129,10 @@ public:
         return d;
     }
     
-    Data peek_next_next_tok() {
+    Data peek_next_next_next_tok() {
         int x = cur_ptr;
         Data d = read_next_tok();
+        d = read_next_tok();
         d = read_next_tok();
         cur_ptr = x;
         return d;

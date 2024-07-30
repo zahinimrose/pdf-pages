@@ -38,7 +38,7 @@ class Object {
     static unordered_map<int, Object>& table;
 
 public:
-    virtual Data serialize() const {};
+    virtual Data serialize() const  = 0;
     
 };
 
@@ -46,7 +46,41 @@ unordered_map<int, Object*> table;
 Object* direct_parse(const Data& data, Idx& i);
 
 class Reference : public Object {
+public:
     int ref_no;
+    int gen_no;
+
+    static Reference parse(const Data& data, Idx& i) {
+        Lexer l(data, i);
+
+        auto tok = l.read_next_tok();
+        Reference ref;
+        ref.ref_no = stoi(Lexer::toString(tok));
+
+        tok = l.read_next_tok();
+        ref.gen_no = stoi(Lexer::toString(tok));
+        tok = l.read_next_tok();
+
+        if(!Lexer::equalsString(tok, "R")) {
+            cout << "ERROR: Reference must End with R. Instead ends with " << Lexer::toString(tok);
+            exit(1);
+        }
+
+        return ref;
+    }
+
+    virtual Data serialize() const {
+        auto s = to_string(ref_no);
+        Data d;
+        d.insert(d.end(), s.begin(), s.end());
+        d.push_back(' ');
+        s = to_string(gen_no);
+        d.insert(d.end(), s.begin(), s.end());
+        d.push_back(' ');
+        d.push_back('R');
+
+        return d;
+    }
 };
 
 class Name_object: public Object {
@@ -89,7 +123,44 @@ template<> struct std::hash<Name_object> {
 };
 
 class Array_object: public Object {
-    std::vector<Object> list;
+public:
+    std::vector<Object*> list;
+    static Array_object parse(const Data& data, Idx& i) {
+        Lexer l(data, i);
+        auto tok = l.read_next_tok();
+        if(!Lexer::equalsString(tok, "[")) {
+            cout << "ERROR: Array object must start with <<";
+            exit(1);
+        }
+
+        Array_object arr;
+
+        tok = l.peek_next_tok();
+        while(!Lexer::equalsString(tok, "]")) {
+            Object* o = direct_parse(data, i);
+            arr.list.push_back(o);
+
+            tok = l.peek_next_tok();
+        }
+        l.read_next_tok();
+
+        return arr;
+    }
+
+    Data serialize() const {
+
+        Data d;
+        d.push_back('[');
+        d.push_back(' ');
+        for(auto& e: list) {
+            auto key = e->serialize();
+            d.insert(d.end(), key.begin(), key.end());
+            d.push_back(' ');
+        }
+        d.push_back(']');
+
+        return d;
+    };
 };
 
 class Dict_object : public Object {
@@ -294,10 +365,13 @@ Object* direct_parse(const Data& data, Idx& i) {
             return ret;
         }
         else if(isdigit(tok[0])) {
-            auto next = l.peek_next_next_tok();
-            if(isdigit(next[0])) {
-                cout << "Parsing references not implemented";
-                exit(1);
+            auto next = l.peek_next_next_next_tok();
+            if(Lexer::equalsString(next, "R")) {
+                Reference ref = Reference::parse(data, i);
+
+                auto ret = new Reference;
+                *ret = ref;
+                return ret;
             }
             else {
                 Num_object num = Num_object::parse(data, i);
@@ -319,6 +393,16 @@ Object* direct_parse(const Data& data, Idx& i) {
             *ret = s;
             return ret;
         }
+        else if(Lexer::equalsString(tok, "[")) {
+            Array_object arr = Array_object::parse(data, i);
+            auto ret = new Array_object;
+            *ret = arr;
+            return ret;
+        }
+
+        cout << "ERROR: cannot detect object type for token " << Lexer::toString(tok) << std::endl;
+        exit(1);
+        return NULL;
 }
 
 Object* indirect_parse(const Data& data, Idx& i) {
