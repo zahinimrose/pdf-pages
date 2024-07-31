@@ -35,14 +35,19 @@ void print_tok(Data tok) {
 
 class Object {
     bool indirect;
-    static unordered_map<int, Object>& table;
-
 public:
+    inline static unordered_map<int, Object*> table;
+
+    static void set_table(int id, Object* obj) {
+        table[id] = obj;
+    }
+    static const unordered_map<int, Object*>& get_table() {
+        return table;
+    }
     virtual Data serialize() const  = 0;
     
 };
 
-unordered_map<int, Object*> table;
 Object* direct_parse(const Data& data, Idx& i);
 
 class Reference : public Object {
@@ -81,6 +86,10 @@ public:
 
         return d;
     }
+    Object* deref() {
+        return Object::get_table().at(ref_no);
+    }
+
 };
 
 class Name_object: public Object {
@@ -112,7 +121,7 @@ public:
 
         return d;
     };
-
+    
 };
 
 template<> struct std::hash<Name_object> {
@@ -208,6 +217,20 @@ public:
 
         return d;
     };
+
+    Object* get(string str) {
+        Name_object n;
+        n.name = str;
+        if (!map.count(n)) {
+            std::cout << "Dict does not have field: " << str <<std::endl;
+        }
+
+        return map[n];
+    }
+    Object* get_deref(string str) {
+        auto ref = (Reference*)get(str);
+        return ref->deref();
+    }
 };
 
 class Stream_object: public Object {
@@ -223,12 +246,8 @@ public:
             exit(1);
         }
 
-        Name_object n;
-        n.name = "Length";
-        if (!dict.map.count(n)) {
-            std::cout << "Stream dict must have Length Field" <<std::endl;
-        }
-        int stream_length = stoi(Lexer::toString(dict.map[n]->serialize()));
+        
+        int stream_length = stoi(Lexer::toString(dict.get("Length")->serialize()));
         // cout << "Length: " << stream_length << std::endl;
 
         Stream_object obj;
@@ -434,7 +453,7 @@ Object* indirect_parse(const Data& data, Idx& i) {
             cout << "ERROR: Indirect reference must end with endobj";
         }
 
-        table[obj_num] = obj;
+        Object::set_table(obj_num, obj);
         cout << "Parsed obj num " << obj_num << std::endl;
         return obj;
 }
