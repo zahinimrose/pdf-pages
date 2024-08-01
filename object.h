@@ -12,6 +12,15 @@ typedef int Idx;
 
 const char white_space[6] = {0, 9, 10, 12, 13, 32};
 
+void append(Data& data, string&& str) {
+    data.insert(data.end(), str.begin(), str.end());
+}
+
+void append(Data& data, Data str) {
+    data.insert(data.end(), str.begin(), str.end());
+}
+
+
 bool is_white_space(char ch) {
     for(int i = 0; i < 6; i++) {
         if(ch == white_space[i]) {
@@ -45,6 +54,7 @@ public:
         return table;
     }
     virtual Data serialize() const  = 0;
+    virtual Data write(Data& obj_buffer, Idx& cur_obj_no) const = 0;
     
 };
 
@@ -74,7 +84,7 @@ public:
         return ref;
     }
 
-    virtual Data serialize() const {
+    Data serialize() const {
         auto s = to_string(ref_no);
         Data d;
         d.insert(d.end(), s.begin(), s.end());
@@ -86,8 +96,24 @@ public:
 
         return d;
     }
-    Object* deref() {
+    Object* deref() const {
         return Object::get_table().at(ref_no);
+    }
+    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+        Data out = deref()->write(obj_buffer, cur_obj_no);
+
+        append(obj_buffer, to_string(cur_obj_no));
+        append(obj_buffer, " 0 obj\n");
+        append(obj_buffer, out);
+        append(obj_buffer, "\nendobj\n");
+
+        Data d;
+        append(d, to_string(cur_obj_no));
+        append(d, " 0 R");
+
+        cur_obj_no++;
+
+        return d;
     }
 
 };
@@ -114,13 +140,18 @@ public:
         return n;
 
     }
-    virtual Data serialize() const {
+    Data serialize() const {
         Data d;
         d.push_back('/');
         d.insert(d.end(), name.begin(), name.end());
 
         return d;
     };
+
+    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+        return serialize();
+    };
+
     
 };
 
@@ -163,6 +194,20 @@ public:
         d.push_back(' ');
         for(auto& e: list) {
             auto key = e->serialize();
+            d.insert(d.end(), key.begin(), key.end());
+            d.push_back(' ');
+        }
+        d.push_back(']');
+
+        return d;
+    };
+
+    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+        Data d;
+        d.push_back('[');
+        d.push_back(' ');
+        for(auto& e: list) {
+            auto key = e->write(obj_buffer, cur_obj_no);
             d.insert(d.end(), key.begin(), key.end());
             d.push_back(' ');
         }
@@ -217,6 +262,26 @@ public:
 
         return d;
     };
+
+    Data write(Data& obj_buffer, Idx& cur_obj_no) const override {
+        Data d;
+        d.push_back('<');
+        d.push_back('<');
+        d.push_back('\n');
+        for(auto& e: map) {
+            auto key = e.first.write(obj_buffer, cur_obj_no);
+            d.insert(d.end(), key.begin(), key.end());
+            d.push_back(' ');
+            auto value = e.second->write(obj_buffer, cur_obj_no);
+            d.insert(d.end(), value.begin(), value.end());
+            d.push_back('\n');
+            cout << endl;
+        }
+        d.push_back('>');
+        d.push_back('>');
+
+        return d;
+    }
 
     Object* get(string str) {
         Name_object n;
@@ -297,6 +362,23 @@ public:
 
         return d;
     }
+
+    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+        auto d = dict.write(obj_buffer, cur_obj_no);
+        d.push_back(' ');
+
+        string str = "stream";
+        d.push_back(' ');
+        d.insert(d.end(), str.begin(), str.end());
+        d.push_back(10);
+        d.insert(d.end(), data.begin(), data.end());
+        d.push_back(10);
+        str = "endstream";
+        d.insert(d.end(), str.begin(), str.end());
+        d.push_back(10);
+
+        return d;
+    }
 };
 
 class String_object : public Object {
@@ -337,6 +419,10 @@ public:
     Data serialize() const {
         return str;
     }
+
+    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+        return str;
+    }
 };
 
 class Single_object : public Object {
@@ -353,6 +439,10 @@ public:
 
     Data serialize() const {
         
+        return data;
+    }
+
+    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
         return data;
     }
 };
