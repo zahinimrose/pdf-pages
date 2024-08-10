@@ -46,6 +46,7 @@ class Object {
     bool indirect;
 public:
     inline static unordered_map<int, Object*> table;
+    
 
     static void set_table(int id, Object* obj) {
         table[id] = obj;
@@ -528,31 +529,31 @@ Object* direct_parse(const Data& data, Idx& i) {
         return NULL;
 }
 
-Object* indirect_parse(const Data& data, Idx& i) {
-        Lexer l(data, i);
-        auto tok = l.read_next_tok();
-        int obj_num = stoi(Lexer::toString(tok));
-        tok = l.read_next_tok();
-        tok = l.read_next_tok();
-        if(!Lexer::equalsString(tok, "obj")) {
-            cout << "ERROR: Indirect reference must have obj";
-        }
-        auto obj =  direct_parse(data, i);
-        tok = l.read_next_tok();
-        if(!Lexer::equalsString(tok, "endobj")) {
-            cout << "ERROR: Indirect reference must end with endobj";
-        }
+// Object* indirect_parse(const Data& data, Idx& i) {
+//         Lexer l(data, i);
+//         auto tok = l.read_next_tok();
+//         int obj_num = stoi(Lexer::toString(tok));
+//         tok = l.read_next_tok();
+//         tok = l.read_next_tok();
+//         if(!Lexer::equalsString(tok, "obj")) {
+//             cout << "ERROR: Indirect reference must have obj";
+//         }
+//         auto obj =  direct_parse(data, i);
+//         tok = l.read_next_tok();
+//         if(!Lexer::equalsString(tok, "endobj")) {
+//             cout << "ERROR: Indirect reference must end with endobj";
+//         }
 
-        Object::set_table(obj_num, obj);
-        cout << "Parsed obj num " << obj_num << std::endl;
-        return obj;
-}
+//         Object::set_table(obj_num, obj);
+//         cout << "Parsed obj num " << obj_num << std::endl;
+//         return obj;
+// }
 
-void parse_indirect_objects(const Data& data, Idx& i) {
-    Lexer l(data, i);
-    auto tok = l.peek_next_tok();
-    while(!Lexer::equalsString(tok, "xref")) {
-        indirect_parse(data, i);
-        tok = l.peek_next_tok();
-    }
-}
+// void parse_indirect_objects(const Data& data, Idx& i) {
+//     Lexer l(data, i);
+//     auto tok = l.peek_next_tok();
+//     while(!Lexer::equalsString(tok, "xref")) {
+//         indirect_parse(data, i);
+//         tok = l.peek_next_tok();
+//     }
+// }
