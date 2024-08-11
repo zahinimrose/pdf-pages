@@ -45,17 +45,8 @@ void print_tok(Data tok) {
 class Object {
     bool indirect;
 public:
-    inline static unordered_map<int, Object*> table;
-    
-
-    static void set_table(int id, Object* obj) {
-        table[id] = obj;
-    }
-    static const unordered_map<int, Object*>& get_table() {
-        return table;
-    }
     virtual Data serialize() const  = 0;
-    virtual Data write(Data& obj_buffer, Idx& cur_obj_no) const = 0;
+    virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const = 0;
     
 };
 
@@ -97,11 +88,11 @@ public:
 
         return d;
     }
-    Object* deref() const {
-        return Object::get_table().at(ref_no);
+    Object* deref(unordered_map<int, Object*>& table) const {
+        return table[ref_no];
     }
-    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
-        Data out = deref()->write(obj_buffer, cur_obj_no);
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
+        Data out = deref(table)->write(obj_buffer, cur_obj_no, table);
 
         append(obj_buffer, to_string(cur_obj_no));
         append(obj_buffer, " 0 obj\n");
@@ -149,11 +140,13 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
         return serialize();
     };
 
-    
+    int get_num() {
+        return stoi(name);
+    }
 };
 
 template<> struct std::hash<Name_object> {
@@ -203,12 +196,12 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
         Data d;
         d.push_back('[');
         d.push_back(' ');
         for(auto& e: list) {
-            auto key = e->write(obj_buffer, cur_obj_no);
+            auto key = e->write(obj_buffer, cur_obj_no, table);
             d.insert(d.end(), key.begin(), key.end());
             d.push_back(' ');
         }
@@ -264,16 +257,16 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no) const override {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const override {
         Data d;
         d.push_back('<');
         d.push_back('<');
         d.push_back('\n');
         for(auto& e: map) {
-            auto key = e.first.write(obj_buffer, cur_obj_no);
+            auto key = e.first.write(obj_buffer, cur_obj_no, table);
             d.insert(d.end(), key.begin(), key.end());
             d.push_back(' ');
-            auto value = e.second->write(obj_buffer, cur_obj_no);
+            auto value = e.second->write(obj_buffer, cur_obj_no, table);
             d.insert(d.end(), value.begin(), value.end());
             d.push_back('\n');
             cout << endl;
@@ -293,9 +286,9 @@ public:
 
         return map[n];
     }
-    Object* get_deref(string str) {
+    Object* get_deref(string str, unordered_map<int, Object*>& table) {
         auto ref = (Reference*)get(str);
-        return ref->deref();
+        return ref->deref(table);
     }
 };
 
@@ -364,8 +357,8 @@ public:
         return d;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
-        auto d = dict.write(obj_buffer, cur_obj_no);
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
+        auto d = dict.write(obj_buffer, cur_obj_no, table);
         d.push_back(' ');
 
         string str = "stream";
@@ -421,7 +414,7 @@ public:
         return str;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
         return str;
     }
 };
@@ -443,7 +436,7 @@ public:
         return data;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
         return data;
     }
 };

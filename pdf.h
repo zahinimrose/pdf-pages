@@ -2,12 +2,28 @@
 #include <fstream>
 #include "object.h"
 
+
+class Pdf_page {
+public:
+
+    unordered_map<int, Object*>& table;
+    Dict_object page;
+
+    Pdf_page(unordered_map<int, Object*>& table, Dict_object page) : table(table), page(page) {}
+    void render(Data& out, int& cur_obj) {
+        auto page_data = page.write(out, cur_obj, table);
+        append(out, page_data);
+    }
+};
+
 class Pdf {
 private:
     Data pdf_data;
-    unordered_map<int, Object*> table;
+    vector<Pdf_page> pages;
 public:
+    unordered_map<int, Object*> table;
     Dict_object trailer;
+    Dict_object catalog;
 
     Object* indirect_parse(const Data& data, Idx& i) {
         Lexer l(data, i);
@@ -61,5 +77,40 @@ public:
         }
 
         trailer = Dict_object::parse(pdf_data, i);
+
+        catalog = *(Dict_object*)trailer.get_deref("Root", table);
+        Dict_object* pages_root = (Dict_object*)catalog.get_deref("Pages", table);
+
+        add_pages(pages_root, pages);
+    }
+
+    Data render() {
+        Data pdf;
+        int cur_obj = 1;
+        
+        append(pdf, "%PDF-1.4\n%����");
+        for(auto& page : pages) {
+            page.render(pdf, cur_obj);
+        }
+
+        return pdf;
+    }
+private:
+    void add_pages(Dict_object* root, vector<Pdf_page>& pages) {
+        auto root_type = ((Name_object*)(root->get("Type")))->name;
+        if(root_type == "Page") {
+            pages.push_back(Pdf_page(table, *root));
+            return;
+        }
+        else if(root_type == "Pages") {
+            auto kids = (Array_object*)root->get("Kids");
+            for(auto kid: kids->list) {
+                auto node = (Dict_object*)(((Reference*)kid)->deref(table));
+                add_pages(node, pages);
+            }
+            return;
+        }
+        cout << "ERROR: Page_node type must be page or pages" << endl;
+        exit(1);
     }
 };

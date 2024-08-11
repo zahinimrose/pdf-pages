@@ -62,9 +62,19 @@ int main() {
 
     Pdf p(file_path);
 
-    auto t = p.trailer.serialize();
 
-    print_tok(t);
+    // Dict_object page_obj = *(Dict_object*)p.table[2];
+    // Name_object n;
+    // n.name = "Parent";
+    // page_obj.map.erase(n);
+
+    // print_tok(page_obj.serialize());
+    // Pdf_page page(p.table, page_obj);
+    // Data d;
+    // int i = 1;
+    // page.render(d, i);
+
+    print_tok(p.catalog.serialize());
 
 
 }
