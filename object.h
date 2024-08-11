@@ -5,8 +5,6 @@
 
 #include "lexer.h"
 
-
-
 typedef std::vector<char> Data;
 typedef int Idx;
 
@@ -46,7 +44,7 @@ class Object {
     bool indirect;
 public:
     virtual Data serialize() const  = 0;
-    virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const = 0;
+    virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const = 0;
     
 };
 
@@ -91,9 +89,11 @@ public:
     Object* deref(unordered_map<int, Object*>& table) const {
         return table[ref_no];
     }
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
-        Data out = deref(table)->write(obj_buffer, cur_obj_no, table);
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+        Data out = deref(table)->write(obj_buffer, cur_obj_no, obj_loc, table);
 
+        int pos = obj_buffer.size();
+        obj_loc[cur_obj_no] = pos;
         append(obj_buffer, to_string(cur_obj_no));
         append(obj_buffer, " 0 obj\n");
         append(obj_buffer, out);
@@ -113,6 +113,7 @@ public:
 class Name_object: public Object {
 public:
     Name_object() = default;
+    Name_object(string name): name(name) {}
     std::string name;
 
     bool operator==(const Name_object &other) const { 
@@ -140,7 +141,7 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
         return serialize();
     };
 
@@ -196,12 +197,12 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
         Data d;
         d.push_back('[');
         d.push_back(' ');
         for(auto& e: list) {
-            auto key = e->write(obj_buffer, cur_obj_no, table);
+            auto key = e->write(obj_buffer, cur_obj_no,obj_loc, table);
             d.insert(d.end(), key.begin(), key.end());
             d.push_back(' ');
         }
@@ -257,19 +258,18 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const override {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const override {
         Data d;
         d.push_back('<');
         d.push_back('<');
         d.push_back('\n');
         for(auto& e: map) {
-            auto key = e.first.write(obj_buffer, cur_obj_no, table);
+            auto key = e.first.write(obj_buffer, cur_obj_no, obj_loc, table);
             d.insert(d.end(), key.begin(), key.end());
             d.push_back(' ');
-            auto value = e.second->write(obj_buffer, cur_obj_no, table);
+            auto value = e.second->write(obj_buffer, cur_obj_no,obj_loc, table);
             d.insert(d.end(), value.begin(), value.end());
             d.push_back('\n');
-            cout << endl;
         }
         d.push_back('>');
         d.push_back('>');
@@ -278,8 +278,7 @@ public:
     }
 
     Object* get(string str) {
-        Name_object n;
-        n.name = str;
+        Name_object n(str);
         if (!map.count(n)) {
             std::cout << "Dict does not have field: " << str <<std::endl;
         }
@@ -357,8 +356,8 @@ public:
         return d;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
-        auto d = dict.write(obj_buffer, cur_obj_no, table);
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+        auto d = dict.write(obj_buffer, cur_obj_no, obj_loc, table);
         d.push_back(' ');
 
         string str = "stream";
@@ -414,7 +413,7 @@ public:
         return str;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
         return str;
     }
 };
@@ -422,13 +421,20 @@ public:
 class Single_object : public Object {
 public:
     Data data;
+    Single_object() = default;
+    Single_object(Data d) : data(d) {}
+    Single_object(int num) {
+        Data d;
+        auto str = to_string(num);
+        d.insert(d.end(), str.begin(), str.end());
+
+        data = d;
+    }
     static Single_object parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
 
-        Single_object obj;
-        obj.data = tok;
-        return obj;
+        return Single_object(tok);
     }
 
     Data serialize() const {
@@ -436,7 +442,7 @@ public:
         return data;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
         return data;
     }
 };
@@ -522,31 +528,3 @@ Object* direct_parse(const Data& data, Idx& i) {
         return NULL;
 }
 
-// Object* indirect_parse(const Data& data, Idx& i) {
-//         Lexer l(data, i);
-//         auto tok = l.read_next_tok();
-//         int obj_num = stoi(Lexer::toString(tok));
-//         tok = l.read_next_tok();
-//         tok = l.read_next_tok();
-//         if(!Lexer::equalsString(tok, "obj")) {
-//             cout << "ERROR: Indirect reference must have obj";
-//         }
-//         auto obj =  direct_parse(data, i);
-//         tok = l.read_next_tok();
-//         if(!Lexer::equalsString(tok, "endobj")) {
-//             cout << "ERROR: Indirect reference must end with endobj";
-//         }
-
-//         Object::set_table(obj_num, obj);
-//         cout << "Parsed obj num " << obj_num << std::endl;
-//         return obj;
-// }
-
-// void parse_indirect_objects(const Data& data, Idx& i) {
-//     Lexer l(data, i);
-//     auto tok = l.peek_next_tok();
-//     while(!Lexer::equalsString(tok, "xref")) {
-//         indirect_parse(data, i);
-//         tok = l.peek_next_tok();
-//     }
-// }
