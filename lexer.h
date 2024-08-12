@@ -66,8 +66,11 @@ public:
             case '<': {
                 cur_ptr++;
                 if(curr_char() != '<') {
-                    cout << "ERROR: Lone <\n";
-                    exit(1);
+                    // cout << "ERROR: Lone < at " << cur_ptr <<  "\n";
+                    // exit(1);
+                    tok.push_back('<');
+                    return tok;
+                    break;
                 }
                 cur_ptr++;
                 tok.push_back('<');
@@ -78,8 +81,11 @@ public:
             case '>': {
                 cur_ptr++;
                 if(curr_char() != '>') {
-                    cout << "ERROR: Lone >\n";
-                    exit(1);
+                    // cout << "ERROR: Lone >\n";
+                    // exit(1);
+                    tok.push_back('<');
+                    return tok;
+                    break;
                 }
                 cur_ptr++;
                 tok.push_back('>');

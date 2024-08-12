@@ -37,7 +37,7 @@ void print_tok(Data tok) {
     for (char ch: tok) {
         cout << ch;
     }
-    cout << "\n";
+    cout << endl;
 }
 
 class Object {
@@ -380,13 +380,25 @@ public:
     static String_object parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
-        if(tok[0] !='(') {
-            cout << "Error: String object must start with ( " << (int)data[i] << "\n";
+        if(tok[0] !='(' && tok[0] !='<') {
+            cout << "Error: String object must start with ( or <" << i << "\n";
             exit(1);
+        }
+        String_object str_obj;
+
+        if(tok[0] == '<') {
+            str_obj.str.push_back('<');
+            while(data[i] != '>') {
+                str_obj.str.push_back(data[i]);
+                i++;
+            }
+            i++;
+            str_obj.str.push_back('>');
+            return str_obj;
+
         }
         bool escape = false;
         int left_parens = 1;
-        String_object str_obj;
         str_obj.str.push_back('(');
         while(left_parens > 0) {
             str_obj.str.push_back(data[i]);
@@ -492,6 +504,12 @@ Object* direct_parse(const Data& data, Idx& i) {
             *ret = s;
             return ret;
         }
+        else if(Lexer::equalsString(tok, "<")) {
+            String_object s = String_object::parse(data, i);
+            auto ret = new String_object;
+            *ret = s;
+            return ret;
+        }
         else if(tok[0] == '/') {
             Name_object s = Name_object::parse(data, i);
             auto ret = new Name_object;
@@ -511,6 +529,12 @@ Object* direct_parse(const Data& data, Idx& i) {
             return ret;
         }
         else if(Lexer::equalsString(tok, "false")) {
+            Single_object obj = Single_object::parse(data, i);
+            auto ret = new Single_object;
+            *ret = obj;
+            return ret;
+        }
+        else if(Lexer::equalsString(tok, "null")) {
             Single_object obj = Single_object::parse(data, i);
             auto ret = new Single_object;
             *ret = obj;
