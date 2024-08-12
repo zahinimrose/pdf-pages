@@ -53,6 +53,7 @@ public:
 }
 
 public:
+    Pdf() = default;
     Pdf(string file_path) {
         std::ifstream file_stream(file_path, std::ios::in | std::ios::binary);
         char ch;
@@ -62,6 +63,10 @@ public:
             pdf_data.push_back(ch);
         }
         file_stream.close();
+
+        // auto ctx = data_context(17578);
+        // print_tok(ctx);
+        // exit(1);
 
         Idx i = 0;
         Lexer l(pdf_data, i);
@@ -199,6 +204,17 @@ public:
         for(char ch: d) {
             file_stream.put(ch);
         }
+    }
+    Data data_context(int i) {
+        int radius = 10;
+        std::ofstream file_stream("debug", std::ios::out | std::ios::binary);
+
+        auto d = Data(pdf_data.begin() + i - radius, pdf_data.begin() + i + radius);
+        for(char ch: d) {
+            file_stream.put(ch);
+        }
+
+        return d;
     }
 private:
     void add_pages(Dict_object* root, vector<Pdf_page>& pages) {
