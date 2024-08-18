@@ -8,6 +8,12 @@ class Pdf_page {
 
 public:
     Pdf_page(unordered_map<int, Object*>& table, Dict_object page) : table(table), page(page) {}
+    Pdf_page& operator=(const Pdf_page& that) {
+        table = that.table;
+        page = that.page;
+
+        return *this;
+    }
 
     Data render(Data& out, int& cur_obj, unordered_map<int, int>& obj_loc) {
         return page.write(out, cur_obj, obj_loc, table);
@@ -21,6 +27,9 @@ public:
         read_file_into_data(file_path);
         parse_obj_and_trailer();
         construct_page_list();
+    }
+    Pdf(Pdf_page page) {
+        pages.push_back(page);
     }
 
     void output(string file_path) {
@@ -36,11 +45,19 @@ public:
     }
 
     Pdf_page get_page(int i) {
-        return pages[i];
+        if(i > pages.size() || i < 1) {
+            cerr << "Page index " << i <<  " out of bounds\n";
+            exit(1);
+        }
+        return pages[i - 1];
     }
 
     void append_page(Pdf_page page) {
         pages.push_back(page);
+    }
+
+    void merge(const Pdf& p) {
+        pages.insert(pages.end(), p.pages.begin(), p.pages.end());
     }
 
 private:
