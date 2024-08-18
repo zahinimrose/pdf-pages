@@ -227,7 +227,13 @@ private:
     }
 
     void read_file_into_data(string file_path) {
-        std::ifstream file_stream(file_path, std::ios::in | std::ios::binary);
+        std::ifstream file_stream;
+        file_stream.open(file_path, std::ios::in | std::ios::binary);
+        if(file_stream.fail()) {
+            cout <<  file_path << " not found" << endl;
+            exit(1);
+        }
+        
         char ch;
 
         while(file_stream) {
