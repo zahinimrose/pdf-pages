@@ -3,10 +3,10 @@
 #include "object.h"
 
 class Pdf_page {
-public:
     unordered_map<int, Object*>& table;
     Dict_object page;
 
+public:
     Pdf_page(unordered_map<int, Object*>& table, Dict_object page) : table(table), page(page) {}
 
     Data render(Data& out, int& cur_obj, unordered_map<int, int>& obj_loc) {
@@ -15,9 +15,28 @@ public:
 };
 
 class Pdf {
+public:
+    Pdf() = default;
+    Pdf(string file_path) {
+        read_file_into_data(file_path);
+        parse_obj_and_trailer();
+        construct_page_list();
+    }
+
+    void output(string file_path) {
+        std::ofstream file_stream(file_path, std::ios::out | std::ios::binary);
+        auto d = render();
+        for(char ch: d) {
+            file_stream.put(ch);
+        }
+    }
+
+    inline int get_page_count() {
+        return pages.size();
+    }
+
 private:
     Data pdf_data;
-public:
     vector<Pdf_page> pages;
     unordered_map<int, Object*> table;
     Dict_object trailer;
@@ -52,39 +71,16 @@ public:
     }
 }
 
-public:
-    Pdf() = default;
-    Pdf(string file_path) {
-        std::ifstream file_stream(file_path, std::ios::in | std::ios::binary);
-        char ch;
+    Data data_context(int i) {
+        int radius = 10;
+        std::ofstream file_stream("debug", std::ios::out | std::ios::binary);
 
-        while(file_stream) {
-            file_stream.get(ch);
-            pdf_data.push_back(ch);
-        }
-        file_stream.close();
-
-        // auto ctx = data_context(17578);
-        // print_tok(ctx);
-        // exit(1);
-
-        Idx i = 0;
-        Lexer l(pdf_data, i);
-        l.read_next_tok();
-        l.read_next_tok();
-        parse_indirect_objects(pdf_data, i);
-        Lexer n(pdf_data, i);
-        auto tok = n.read_next_tok();
-        while(!Lexer::equalsString(tok, "trailer")) {
-            tok = n.read_next_tok();
+        auto d = Data(pdf_data.begin() + i - radius, pdf_data.begin() + i + radius);
+        for(char ch: d) {
+            file_stream.put(ch);
         }
 
-        trailer = Dict_object::parse(pdf_data, i);
-
-        catalog = *(Dict_object*)trailer.get_deref("Root", table);
-        Dict_object* pages_root = (Dict_object*)catalog.get_deref("Pages", table);
-
-        add_pages(pages_root, pages);
+        return d;
     }
 
     Data render() {
@@ -198,25 +194,6 @@ public:
         return pdf;
     }
 
-    void output(string file_path) {
-        std::ofstream file_stream(file_path, std::ios::out | std::ios::binary);
-        auto d = render();
-        for(char ch: d) {
-            file_stream.put(ch);
-        }
-    }
-    Data data_context(int i) {
-        int radius = 10;
-        std::ofstream file_stream("debug", std::ios::out | std::ios::binary);
-
-        auto d = Data(pdf_data.begin() + i - radius, pdf_data.begin() + i + radius);
-        for(char ch: d) {
-            file_stream.put(ch);
-        }
-
-        return d;
-    }
-private:
     void add_pages(Dict_object* root, vector<Pdf_page>& pages) {
         auto root_type = ((Name_object*)(root->get("Type")))->name;
         if(root_type == "Page") {
@@ -237,4 +214,37 @@ private:
         cout << "ERROR: Page_node type must be page or pages" << endl;
         exit(1);
     }
+
+    void read_file_into_data(string file_path) {
+        std::ifstream file_stream(file_path, std::ios::in | std::ios::binary);
+        char ch;
+
+        while(file_stream) {
+            file_stream.get(ch);
+            pdf_data.push_back(ch);
+        }
+        file_stream.close();
+    }
+
+    void parse_obj_and_trailer() {
+        Idx i = 0;
+        Lexer l(pdf_data, i);
+        l.read_next_tok();
+        l.read_next_tok();
+        parse_indirect_objects(pdf_data, i);
+        Lexer n(pdf_data, i);
+        auto tok = n.read_next_tok();
+        while(!Lexer::equalsString(tok, "trailer")) {
+            tok = n.read_next_tok();
+        }
+
+        trailer = Dict_object::parse(pdf_data, i);
+    }
+
+    void construct_page_list() {
+        catalog = *(Dict_object*)trailer.get_deref("Root", table);
+        Dict_object* pages_root = (Dict_object*)catalog.get_deref("Pages", table);
+
+        add_pages(pages_root, pages);
+    };
 };
