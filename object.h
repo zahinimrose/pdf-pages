@@ -41,7 +41,6 @@ void print_tok(Data tok) {
 }
 
 class Object {
-    bool indirect;
 public:
     virtual Data serialize() const  = 0;
     virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const = 0;
@@ -243,7 +242,7 @@ public:
         Data d;
         d.push_back('<');
         d.push_back('<');
-        d.push_back('\n');
+        // d.push_back('\n');
         for(auto& e: map) {
             auto key = e.first.serialize();
             d.insert(d.end(), key.begin(), key.end());
@@ -262,7 +261,7 @@ public:
         Data d;
         d.push_back('<');
         d.push_back('<');
-        d.push_back('\n');
+        // d.push_back('\n');
         for(auto& e: map) {
             auto key = e.first.write(obj_buffer, cur_obj_no, obj_loc, table);
             d.insert(d.end(), key.begin(), key.end());
