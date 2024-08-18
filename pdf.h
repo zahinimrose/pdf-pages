@@ -35,6 +35,14 @@ public:
         return pages.size();
     }
 
+    Pdf_page get_page(int i) {
+        return pages[i];
+    }
+
+    void append_page(Pdf_page page) {
+        pages.push_back(page);
+    }
+
 private:
     Data pdf_data;
     vector<Pdf_page> pages;
@@ -197,9 +205,12 @@ private:
     void add_pages(Dict_object* root, vector<Pdf_page>& pages) {
         auto root_type = ((Name_object*)(root->get("Type")))->name;
         if(root_type == "Page") {
-            Name_object n;
-            n.name = "Parent";
-            root->map.erase(n);
+            root->map.erase(Name_object("Parent"));
+            
+            //Annots entry is being removed to remove circular reference to page
+            //TODO: Fix circular depedence issue on page serializing
+            root->map.erase(Name_object("Annots"));
+
             pages.push_back(Pdf_page(table, *root));
             return;
         }
