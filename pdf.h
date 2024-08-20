@@ -23,6 +23,8 @@ public:
 
 class Pdf {
 public:
+    const static inline string default_output = "output.pdf";
+
     Pdf() = default;
     Pdf(string file_path) {
         read_file_into_data(file_path);
@@ -38,6 +40,12 @@ public:
         pages.push_back(page);
     }
 
+//Outputs as default file name
+    void output() {
+        output(default_output);
+    }
+
+//Outputs the Pdf object into file name specified
     void output(string file_path) {
         std::ofstream file_stream(file_path, std::ios::out | std::ios::binary);
         auto d = render();
@@ -81,6 +89,7 @@ private:
         tok = l.read_next_tok();
         if(!Lexer::equalsString(tok, "obj")) {
             cout << "ERROR: Indirect reference must have obj";
+            exit(1);
         }
         auto obj =  direct_parse(data, i);
         tok = l.read_next_tok();
@@ -267,11 +276,10 @@ private:
     }
 
     void parse_obj_and_trailer() {
+        validate_pdf_header();
         ref_table = make_shared<unordered_map<int, Object*>>();
+
         Idx i = 0;
-        Lexer l(pdf_data, i);
-        l.read_next_tok();
-        l.read_next_tok();
         parse_indirect_objects(pdf_data, i);
         Lexer n(pdf_data, i);
         auto tok = n.read_next_tok();
@@ -280,6 +288,14 @@ private:
         }
 
         trailer = Dict_object::parse(pdf_data, i);
+    }
+
+    void validate_pdf_header() {
+        //TODO: implement pdf header validation
+        // Lexer l(pdf_data, i);
+        // auto tok = l.read_next_tok();
+
+        // l.read_next_tok();
     }
 
     void construct_page_list() {
