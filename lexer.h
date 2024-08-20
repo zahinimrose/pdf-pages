@@ -39,6 +39,7 @@ void print_tok(Data tok) {
     cout << endl;
 }
 
+//TODO: Implement cleaner lexer class without Idx
 class Lexer {
 public:
     Lexer(const Data& data, Idx& start) : data(data), cur_ptr(start) {}
@@ -70,7 +71,7 @@ private:
 
     bool is_special() {
         char ch = curr_char();
-        const char special[] = {'<', '>', '(', ')', '[', ']', '/'};
+        const char special[] = {'<', '>', '(', ')', '[', ']', '/', '%'};
         for(int i = 0; i < sizeof(special); i++) {
             if(ch == special[i]) {
                 return true;
@@ -91,9 +92,23 @@ public:
     Data read_next_tok() {
         Data tok;
 
+        //Dumb hack to handle comments and white space
         while(is_white_space()) {
             cur_ptr++;
         }
+        while(curr_char() == '%') {
+            cur_ptr++;
+            while(curr_char() != 13 && curr_char() != 10) {
+                cur_ptr++;
+            }
+            while(is_white_space()) {
+                cur_ptr++;
+            }
+        }
+        while(is_white_space()) {
+            cur_ptr++;
+        }
+
         switch(curr_char()) {
             case '<': {
                 cur_ptr++;
