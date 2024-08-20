@@ -2,11 +2,12 @@
 
 #include "pdf.h"
 
-namespace fs = std::filesystem;
+string default_output = "merged.pdf";
 
 int main() {
     Pdf merged;
 
+    namespace fs = std::filesystem;
     for (const auto& entry : fs::directory_iterator(".")) {
         if (entry.is_regular_file() && entry.path().extension() == ".pdf") {
             string name = entry.path().filename().string();
@@ -17,5 +18,7 @@ int main() {
         }
     }
 
-    merged.output("out2.pdf");
+    merged.output(default_output);
+    cout << "Merging succesfully complete!" << endl;
+    cout << "Output: " << default_output << endl;
 }
