@@ -7,6 +7,38 @@ using namespace std;
 typedef std::vector<char> Data;
 typedef int Idx;
 
+const char white_space[6] = {0, 9, 10, 12, 13, 32};
+
+void append(Data& data, string&& str) {
+    data.insert(data.end(), str.begin(), str.end());
+}
+
+void append(Data& data, Data str) {
+    data.insert(data.end(), str.begin(), str.end());
+}
+
+
+bool is_white_space(char ch) {
+    for(int i = 0; i < 6; i++) {
+        if(ch == white_space[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline void consume_white_space(const Data& data, Idx& i) {
+    while(is_white_space(data[i])) i++;
+}
+
+
+void print_tok(Data tok) {
+    for (char ch: tok) {
+        cout << ch;
+    }
+    cout << endl;
+}
+
 class Lexer {
 public:
     Lexer(const Data& data, Idx& start) : data(data), cur_ptr(start) {}
@@ -38,7 +70,7 @@ private:
 
     bool is_special() {
         char ch = curr_char();
-        const char special[] = {'<', '>', '(', ')', '[', ']'};
+        const char special[] = {'<', '>', '(', ')', '[', ']', '/'};
         for(int i = 0; i < sizeof(special); i++) {
             if(ch == special[i]) {
                 return true;
@@ -75,7 +107,6 @@ public:
                 cur_ptr++;
                 tok.push_back('<');
                 tok.push_back('<');
-                return tok;
                 break;
             }
             case '>': {
@@ -90,31 +121,31 @@ public:
                 cur_ptr++;
                 tok.push_back('>');
                 tok.push_back('>');
-                return tok;
                 break;
             }
             case '(': {
                 cur_ptr++;
                 tok.push_back('(');
-                return tok;
                 break;
             }
             case ')': {
                 cur_ptr++;
                 tok.push_back(')');
-                return tok;
                 break;
             }
             case '[': {
                 cur_ptr++;
                 tok.push_back('[');
-                return tok;
                 break;
             }
             case ']': {
                 cur_ptr++;
                 tok.push_back(']');
-                return tok;
+                break;
+            }
+            case '/': {
+                cur_ptr++;
+                tok.push_back('/');
                 break;
             }
             default: {
@@ -122,10 +153,11 @@ public:
                     tok.push_back(curr_char());
                     cur_ptr++;
                 }
-                return tok;
+                break;
             }
         }
-        
+        // print_tok(tok);
+        return tok;
     }
 
     Data peek_next_tok() {
@@ -135,6 +167,13 @@ public:
         return d;
     }
     
+    Data peek_next_next_tok() {
+        int x = cur_ptr;
+        Data d = read_next_tok();
+        d = read_next_tok();
+        cur_ptr = x;
+        return d;
+    }
     Data peek_next_next_next_tok() {
         int x = cur_ptr;
         Data d = read_next_tok();

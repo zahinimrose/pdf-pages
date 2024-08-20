@@ -26,6 +26,11 @@ public:
     Pdf() = default;
     Pdf(string file_path) {
         read_file_into_data(file_path);
+
+        // auto c = data_context(512);
+        // print_tok(c);
+        // exit(1);
+
         parse_obj_and_trailer();
         construct_page_list();
     }
@@ -98,7 +103,7 @@ private:
 }
 
     Data data_context(int i) {
-        int radius = 10;
+        int radius = 3;
         std::ofstream file_stream("debug", std::ios::out | std::ios::binary);
 
         auto d = Data(pdf_data.begin() + i - radius, pdf_data.begin() + i + radius);

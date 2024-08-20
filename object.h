@@ -6,41 +6,6 @@
 
 #include "lexer.h"
 
-typedef std::vector<char> Data;
-typedef int Idx;
-
-const char white_space[6] = {0, 9, 10, 12, 13, 32};
-
-void append(Data& data, string&& str) {
-    data.insert(data.end(), str.begin(), str.end());
-}
-
-void append(Data& data, Data str) {
-    data.insert(data.end(), str.begin(), str.end());
-}
-
-
-bool is_white_space(char ch) {
-    for(int i = 0; i < 6; i++) {
-        if(ch == white_space[i]) {
-            return true;
-        }
-    }
-    return false;
-}
-
-inline void consume_white_space(const Data& data, Idx& i) {
-    while(is_white_space(data[i])) i++;
-}
-
-
-void print_tok(Data tok) {
-    for (char ch: tok) {
-        cout << ch;
-    }
-    cout << endl;
-}
-
 class Object {
 public:
     virtual Data serialize() const  = 0;
@@ -123,14 +88,13 @@ public:
     static Name_object parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
-        if(tok[0] != '/') {
-            cout<< "ERROR: Name_object must start with /";
+        if(!Lexer::equalsString(tok, "/")) {
+            cout<< "ERROR: Name_object must start with / " << i;
             exit(1);
         }
-        Name_object n;
-        n.name = std::string(tok.begin() + 1, tok.end());
+        tok = l.read_next_tok();
 
-        return n;
+        return Name_object(string(tok.begin(), tok.end()));
 
     }
     Data serialize() const {
@@ -482,8 +446,9 @@ Object* direct_parse(const Data& data, Idx& i) {
             return ret;
         }
         else if(isdigit(tok[0])) {
-            auto next = l.peek_next_next_next_tok();
-            if(Lexer::equalsString(next, "R")) {
+            auto next = l.peek_next_next_tok();
+            auto next_next = l.peek_next_next_next_tok();
+            if(Lexer::equalsString(next_next, "R") && isdigit(next[0])) {
                 Reference ref = Reference::parse(data, i);
 
                 auto ret = new Reference;
@@ -510,10 +475,10 @@ Object* direct_parse(const Data& data, Idx& i) {
             *ret = s;
             return ret;
         }
-        else if(tok[0] == '/') {
-            Name_object s = Name_object::parse(data, i);
+        else if(Lexer::equalsString(tok, "/")) {
+            Name_object name = Name_object::parse(data, i);
             auto ret = new Name_object;
-            *ret = s;
+            *ret = name;
             return ret;
         }
         else if(Lexer::equalsString(tok, "[")) {
