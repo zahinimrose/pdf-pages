@@ -2,6 +2,7 @@
 #include <string>
 #include <unordered_map>
 #include <iostream>
+#include <memory>
 
 #include "lexer.h"
 
@@ -43,7 +44,7 @@ void print_tok(Data tok) {
 class Object {
 public:
     virtual Data serialize() const  = 0;
-    virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const = 0;
+    virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const = 0;
     
 };
 
@@ -85,10 +86,10 @@ public:
 
         return d;
     }
-    Object* deref(unordered_map<int, Object*>& table) const {
-        return table[ref_no];
+    Object* deref(shared_ptr<unordered_map<int, Object*>> table) const {
+        return (*table)[ref_no];
     }
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
         Data out = deref(table)->write(obj_buffer, cur_obj_no, obj_loc, table);
 
         int pos = obj_buffer.size();
@@ -140,7 +141,7 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
         return serialize();
     };
 
@@ -196,7 +197,7 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
         Data d;
         d.push_back('[');
         d.push_back(' ');
@@ -257,7 +258,7 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const override {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const override {
         Data d;
         d.push_back('<');
         d.push_back('<');
@@ -284,7 +285,7 @@ public:
 
         return map[n];
     }
-    Object* get_deref(string str, unordered_map<int, Object*>& table) {
+    Object* get_deref(string str, shared_ptr<unordered_map<int, Object*>> table) {
         auto ref = (Reference*)get(str);
         return ref->deref(table);
     }
@@ -355,7 +356,7 @@ public:
         return d;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
         auto d = dict.write(obj_buffer, cur_obj_no, obj_loc, table);
         d.push_back(' ');
 
@@ -424,7 +425,7 @@ public:
         return str;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
         return str;
     }
 };
@@ -453,7 +454,7 @@ public:
         return data;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, unordered_map<int, Object*>& table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
         return data;
     }
 };

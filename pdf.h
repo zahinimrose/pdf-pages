@@ -3,11 +3,12 @@
 #include "object.h"
 
 class Pdf_page {
-    unordered_map<int, Object*>& table;
+    shared_ptr<unordered_map<int, Object*>> table;
     Dict_object page;
 
 public:
-    Pdf_page(unordered_map<int, Object*>& table, Dict_object page) : table(table), page(page) {}
+    Pdf_page() = default;
+    Pdf_page(shared_ptr<unordered_map<int, Object*>> table, Dict_object page) : table(table), page(page) {}
     Pdf_page& operator=(const Pdf_page& that) {
         table = that.table;
         page = that.page;
@@ -63,7 +64,7 @@ public:
 private:
     Data pdf_data;
     vector<Pdf_page> pages;
-    unordered_map<int, Object*> table;
+    shared_ptr<unordered_map<int, Object*>> ref_table;
     Dict_object trailer;
     Dict_object catalog;
 
@@ -82,7 +83,7 @@ private:
             cout << "ERROR: Indirect reference must end with endobj";
         }
 
-        table[obj_num] = obj;
+        (*ref_table)[obj_num] = obj;
         // cout << "Parsed obj num " << obj_num << std::endl;
         return obj;
     }
@@ -228,13 +229,13 @@ private:
             //TODO: Fix circular depedence issue on page serializing
             root->map.erase(Name_object("Annots"));
 
-            pages.push_back(Pdf_page(table, *root));
+            pages.push_back(Pdf_page(ref_table, *root));
             return;
         }
         else if(root_type == "Pages") {
             auto kids = (Array_object*)root->get("Kids");
             for(auto kid: kids->list) {
-                auto node = (Dict_object*)(((Reference*)kid)->deref(table));
+                auto node = (Dict_object*)(((Reference*)kid)->deref(ref_table));
                 add_pages(node, pages);
             }
             return;
@@ -261,6 +262,7 @@ private:
     }
 
     void parse_obj_and_trailer() {
+        ref_table = make_shared<unordered_map<int, Object*>>();
         Idx i = 0;
         Lexer l(pdf_data, i);
         l.read_next_tok();
@@ -276,8 +278,8 @@ private:
     }
 
     void construct_page_list() {
-        catalog = *(Dict_object*)trailer.get_deref("Root", table);
-        Dict_object* pages_root = (Dict_object*)catalog.get_deref("Pages", table);
+        catalog = *(Dict_object*)trailer.get_deref("Root", ref_table);
+        Dict_object* pages_root = (Dict_object*)catalog.get_deref("Pages", ref_table);
 
         add_pages(pages_root, pages);
     };
