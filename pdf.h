@@ -137,7 +137,7 @@ private:
         }
 
         int root_pages_num =  cur_obj + page_count;
-        Array_object* kids = new Array_object;
+        Array_object kids;
 
         for(auto& data : page_datas) {
             int i = 0;
@@ -158,7 +158,7 @@ private:
             Reference* c = new Reference;
             c->ref_no = cur_obj;
             c->gen_no = 0;
-            kids->list.push_back(c);
+            kids.list.push_back(c);
 
             cur_obj++;
         }
@@ -172,7 +172,7 @@ private:
         Single_object* count = new Single_object(page_count);
         root_pages.map[Name_object("Count")] = count;
 
-        root_pages.map[Name_object("Kids")] = kids;
+        root_pages.map[Name_object("Kids")] = &kids;
 
         int pos = pdf.size();
         obj_loc[cur_obj] = pos;
