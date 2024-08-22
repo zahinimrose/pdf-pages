@@ -9,18 +9,18 @@
 class Object {
 public:
     virtual Data serialize() const  = 0;
-    virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const = 0;
+    virtual Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const = 0;
     
 };
 
-Object* direct_parse(const Data& data, Idx& i);
+shared_ptr<Object> direct_parse(const Data& data, Idx& i);
 
 class Reference : public Object {
 public:
     int ref_no;
     int gen_no;
 
-    static Reference parse(const Data& data, Idx& i) {
+    static shared_ptr<Reference> parse(const Data& data, Idx& i) {
         Lexer l(data, i);
 
         auto tok = l.read_next_tok();
@@ -36,7 +36,7 @@ public:
             exit(1);
         }
 
-        return ref;
+        return make_shared<Reference>(ref);
     }
 
     Data serialize() const {
@@ -51,10 +51,10 @@ public:
 
         return d;
     }
-    Object* deref(shared_ptr<unordered_map<int, Object*>> table) const {
+    shared_ptr<Object> deref(shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const {
         return (*table)[ref_no];
     }
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const {
         Data out = deref(table)->write(obj_buffer, cur_obj_no, obj_loc, table);
 
         int pos = obj_buffer.size();
@@ -85,7 +85,7 @@ public:
         return name == other.name;
     }
 
-    static Name_object parse(const Data& data, Idx& i) {
+    static shared_ptr<Name_object> parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
         if(!Lexer::equalsString(tok, "/")) {
@@ -94,7 +94,7 @@ public:
         }
         tok = l.read_next_tok();
 
-        return Name_object(string(tok.begin(), tok.end()));
+        return make_shared<Name_object>(Name_object(string(tok.begin(), tok.end())));
 
     }
     Data serialize() const {
@@ -105,7 +105,7 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const {
         return serialize();
     };
 
@@ -123,8 +123,8 @@ template<> struct std::hash<Name_object> {
 
 class Array_object: public Object {
 public:
-    std::vector<Object*> list;
-    static Array_object parse(const Data& data, Idx& i) {
+    std::vector<shared_ptr<Object>> list;
+    static shared_ptr<Array_object> parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
         if(!Lexer::equalsString(tok, "[")) {
@@ -136,14 +136,14 @@ public:
 
         tok = l.peek_next_tok();
         while(!Lexer::equalsString(tok, "]")) {
-            Object* o = direct_parse(data, i);
+            shared_ptr<Object> o = direct_parse(data, i);
             arr.list.push_back(o);
 
             tok = l.peek_next_tok();
         }
         l.read_next_tok();
 
-        return arr;
+        return make_shared<Array_object>(arr);
     }
 
     Data serialize() const {
@@ -161,7 +161,7 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const {
         Data d;
         d.push_back('[');
         d.push_back(' ');
@@ -178,9 +178,9 @@ public:
 
 class Dict_object : public Object {
 public:
-    std::unordered_map<Name_object, Object*> map;
+    std::unordered_map<string, shared_ptr<Object>> map;
 
-    static Dict_object parse(const Data& data, Idx& i) {
+    static shared_ptr<Dict_object> parse(const Data& data, Idx& i) {
         Lexer l(data, i);
 
         auto tok = l.read_next_tok();
@@ -191,15 +191,15 @@ public:
         Dict_object dict;
         tok = l.peek_next_tok();
         while(!Lexer::equalsString(tok, ">>")) {
-            Name_object key = Name_object::parse(data, i);
-            Object* o = direct_parse(data, i);
-            dict.map[key] = o;
+            auto key = Name_object::parse(data, i);
+            shared_ptr<Object> o = direct_parse(data, i);
+            dict.map[key->name] = o;
 
             tok = l.peek_next_tok();
         }
         l.read_next_tok();
 
-        return dict;
+        return make_shared<Dict_object>(dict);
     }
 
     Data serialize() const {
@@ -209,7 +209,7 @@ public:
         d.push_back('<');
         // d.push_back('\n');
         for(auto& e: map) {
-            auto key = e.first.serialize();
+            auto key = "/" + e.first;
             d.insert(d.end(), key.begin(), key.end());
             d.push_back(' ');
             auto value = e.second->serialize();
@@ -222,13 +222,14 @@ public:
         return d;
     };
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const override {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const override {
         Data d;
         d.push_back('<');
         d.push_back('<');
         // d.push_back('\n');
         for(auto& e: map) {
-            auto key = e.first.write(obj_buffer, cur_obj_no, obj_loc, table);
+            // auto key = e.first.write(obj_buffer, cur_obj_no, obj_loc, table);
+            string key = "/" + e.first;
             d.insert(d.end(), key.begin(), key.end());
             d.push_back(' ');
             auto value = e.second->write(obj_buffer, cur_obj_no,obj_loc, table);
@@ -241,26 +242,25 @@ public:
         return d;
     }
 
-    Object* get(string str) {
-        Name_object n(str);
-        if (!map.count(n)) {
+    shared_ptr<Object> get(string str) {
+        if (!map.count(str)) {
             std::cout << "Dict does not have field: " << str <<std::endl;
         }
 
-        return map[n];
+        return map[str];
     }
-    Object* get_deref(string str, shared_ptr<unordered_map<int, Object*>> table) {
-        auto ref = (Reference*)get(str);
+    shared_ptr<Object> get_deref(string str, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) {
+        auto ref = static_pointer_cast<Reference>(get(str));
         return ref->deref(table);
     }
 };
 
 class Stream_object: public Object {
 public:
-    Dict_object dict;
+    shared_ptr<Dict_object> dict;
     Data data;
 
-    static Stream_object parse(const Data& data, Idx& i, Dict_object dict) {
+    static shared_ptr<Stream_object> parse(const Data& data, Idx& i, shared_ptr<Dict_object> dict) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
         if(!Lexer::equalsString(tok, "stream")) {
@@ -269,7 +269,7 @@ public:
         }
 
         
-        int stream_length = stoi(Lexer::toString(dict.get("Length")->serialize()));
+        int stream_length = stoi(Lexer::toString(dict->get("Length")->serialize()));
         // cout << "Length: " << stream_length << std::endl;
 
         Stream_object obj;
@@ -299,12 +299,12 @@ public:
             exit(1);
         }
 
-        return obj;
+        return make_shared<Stream_object>(obj);
 
     }
 
     Data serialize() const {
-        auto d = dict.serialize();
+        auto d = dict->serialize();
         d.push_back(' ');
 
         string str = "stream";
@@ -320,8 +320,8 @@ public:
         return d;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
-        auto d = dict.write(obj_buffer, cur_obj_no, obj_loc, table);
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const {
+        auto d = dict->write(obj_buffer, cur_obj_no, obj_loc, table);
         d.push_back(' ');
 
         string str = "stream";
@@ -341,7 +341,7 @@ public:
 class String_object : public Object {
 public:
     Data str;
-    static String_object parse(const Data& data, Idx& i) {
+    static shared_ptr<String_object> parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
         if(tok[0] !='(' && tok[0] !='<') {
@@ -358,7 +358,7 @@ public:
             }
             i++;
             str_obj.str.push_back('>');
-            return str_obj;
+            return make_shared<String_object>(str_obj);
 
         }
         bool escape = false;
@@ -382,14 +382,14 @@ public:
             }
             i++;
         }
-        return str_obj;
+        return make_shared<String_object>(str_obj);
     }
 
     Data serialize() const {
         return str;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const {
         return str;
     }
 };
@@ -406,11 +406,11 @@ public:
 
         data = d;
     }
-    static Single_object parse(const Data& data, Idx& i) {
+    static shared_ptr<Single_object> parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
 
-        return Single_object(tok);
+        return make_shared<Single_object>(tok);
     }
 
     Data serialize() const {
@@ -418,98 +418,69 @@ public:
         return data;
     }
 
-    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, Object*>> table) const {
+    Data write(Data& obj_buffer, Idx& cur_obj_no, unordered_map<int, int>& obj_loc, shared_ptr<unordered_map<int, shared_ptr<Object>>> table) const {
         return data;
     }
 };
 
-Object* direct_parse(const Data& data, Idx& i) {
+shared_ptr<Object> direct_parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.peek_next_tok();
         if (Lexer::equalsString(tok, "<<")) {
-            Dict_object dict = Dict_object::parse(data, i);
+            auto dict = Dict_object::parse(data, i);
             tok = l.peek_next_tok();
 
             if(Lexer::equalsString(tok, "stream")) {
-                
-
                 auto stream = Stream_object::parse(data, i, dict);
-                auto ret = new Stream_object;
-                *ret = stream;
-
-                return ret;
+                return stream;
             }
 
-
-            auto ret = new Dict_object;
-            *ret = dict;
-            return ret;
+            return dict;
         }
         else if(isdigit(tok[0])) {
             auto next = l.peek_next_next_tok();
             auto next_next = l.peek_next_next_next_tok();
             if(Lexer::equalsString(next_next, "R") && isdigit(next[0])) {
-                Reference ref = Reference::parse(data, i);
-
-                auto ret = new Reference;
-                *ret = ref;
-                return ret;
+                auto ref = Reference::parse(data, i);
+                return ref;
             }
             else {
-                Single_object obj = Single_object::parse(data, i);
-                auto ret = new Single_object;
-                *ret = obj;
+                auto obj = Single_object::parse(data, i);
 
-                return ret;
+                return obj;
             }
         }
         else if(Lexer::equalsString(tok, "(")) {
-            String_object s = String_object::parse(data, i);
-            auto ret = new String_object;
-            *ret = s;
-            return ret;
+            auto s = String_object::parse(data, i);
+            return s;
         }
         else if(Lexer::equalsString(tok, "<")) {
-            String_object s = String_object::parse(data, i);
-            auto ret = new String_object;
-            *ret = s;
-            return ret;
+            auto s = String_object::parse(data, i);
+            return s;
         }
         else if(Lexer::equalsString(tok, "/")) {
-            Name_object name = Name_object::parse(data, i);
-            auto ret = new Name_object;
-            *ret = name;
-            return ret;
+            auto name = Name_object::parse(data, i);
+            return name;
         }
         else if(Lexer::equalsString(tok, "[")) {
-            Array_object arr = Array_object::parse(data, i);
-            auto ret = new Array_object;
-            *ret = arr;
-            return ret;
+            auto arr = Array_object::parse(data, i);
+            return arr;
         }
         else if(Lexer::equalsString(tok, "true")) {
-            Single_object obj = Single_object::parse(data, i);
-            auto ret = new Single_object;
-            *ret = obj;
-            return ret;
+            auto obj = Single_object::parse(data, i);;
+            return obj;
         }
         else if(Lexer::equalsString(tok, "false")) {
-            Single_object obj = Single_object::parse(data, i);
-            auto ret = new Single_object;
-            *ret = obj;
-            return ret;
+            auto obj = Single_object::parse(data, i);
+            return obj;
         }
         else if(Lexer::equalsString(tok, "null")) {
-            Single_object obj = Single_object::parse(data, i);
-            auto ret = new Single_object;
-            *ret = obj;
-            return ret;
+            auto obj = Single_object::parse(data, i);
+            return obj;
         }
         else if(tok[0] == '+' || tok[0] == '-') {
-            Single_object obj = Single_object::parse(data, i);
-            auto ret = new Single_object;
-            *ret = obj;
-            return ret;
+            auto obj = Single_object::parse(data, i);
+            return obj;
         }
 
         cout << "ERROR: cannot detect object type for token " << Lexer::toString(tok) << std::endl;

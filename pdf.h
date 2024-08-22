@@ -3,12 +3,12 @@
 #include "object.h"
 
 class Pdf_page {
-    shared_ptr<unordered_map<int, Object*>> table;
+    shared_ptr<unordered_map<int, shared_ptr<Object>>> table;
     Dict_object page;
 
 public:
     Pdf_page() = default;
-    Pdf_page(shared_ptr<unordered_map<int, Object*>> table, Dict_object page) : table(table), page(page) {}
+    Pdf_page(shared_ptr<unordered_map<int, shared_ptr<Object>>> table, Dict_object page) : table(table), page(page) {}
     Pdf_page& operator=(const Pdf_page& that) {
         table = that.table;
         page = that.page;
@@ -29,7 +29,7 @@ public:
     Pdf(string file_path) {
         read_file_into_data(file_path);
 
-        // auto c = data_context(512);
+        // auto c = data_context(35349);
         // print_tok(c);
         // exit(1);
 
@@ -77,11 +77,11 @@ public:
 private:
     Data pdf_data;
     vector<Pdf_page> pages;
-    shared_ptr<unordered_map<int, Object*>> ref_table;
+    shared_ptr<unordered_map<int, shared_ptr<Object>>> ref_table;
     Dict_object trailer;
     Dict_object catalog;
 
-    Object* indirect_parse(const Data& data, Idx& i) {
+    shared_ptr<Object> indirect_parse(const Data& data, Idx& i) {
         Lexer l(data, i);
         auto tok = l.read_next_tok();
         int obj_num = stoi(Lexer::toString(tok));
@@ -112,7 +112,7 @@ private:
 }
 
     Data data_context(int i) {
-        int radius = 3;
+        int radius = 20;
         std::ofstream file_stream("debug", std::ios::out | std::ios::binary);
 
         auto d = Data(pdf_data.begin() + i - radius, pdf_data.begin() + i + radius);
@@ -137,28 +137,28 @@ private:
         }
 
         int root_pages_num =  cur_obj + page_count;
-        Array_object kids;
+        auto kids = make_shared<Array_object>();
 
         for(auto& data : page_datas) {
             int i = 0;
-            Dict_object page_dict = Dict_object::parse(data, i);
-            Reference* r = new Reference;
+            auto page_dict = Dict_object::parse(data, i);
+            auto r = make_shared<Reference>();
             r->ref_no = root_pages_num;
             r->gen_no = 0;
-            page_dict.map[Name_object("Parent")] = r;
+            page_dict->map["Parent"] = r;
 
             int pos = pdf.size();
             obj_loc[cur_obj] = pos;
             append(pdf, to_string(cur_obj));
             append(pdf, " 0 obj\n");
-            append(pdf, page_dict.serialize());
+            append(pdf, page_dict->serialize());
             append(pdf, "\nendobj\n");
 
 
-            Reference* c = new Reference;
+            auto c = make_shared<Reference>();
             c->ref_no = cur_obj;
             c->gen_no = 0;
-            kids.list.push_back(c);
+            kids->list.push_back(c);
 
             cur_obj++;
         }
@@ -166,13 +166,13 @@ private:
 
         Dict_object root_pages;
 
-        Name_object* type = new Name_object("Pages");
-        root_pages.map[Name_object("Type")] = type;
+        auto type = make_shared<Name_object>(Name_object("Pages"));
+        root_pages.map["Type"] = type;
 
-        Single_object* count = new Single_object(page_count);
-        root_pages.map[Name_object("Count")] = count;
+        auto count = make_shared<Single_object>(Single_object(page_count));
+        root_pages.map["Count"] = count;
 
-        root_pages.map[Name_object("Kids")] = &kids;
+        root_pages.map["Kids"] = kids;
 
         int pos = pdf.size();
         obj_loc[cur_obj] = pos;
@@ -184,19 +184,19 @@ private:
         int pages_no = cur_obj;
         cur_obj++;
 
-        Dict_object catalog;
-        type = new Name_object("Catalog");
-        catalog.map[Name_object("Type")] = type;
-        Reference* c = new Reference;
+        auto catalog = make_shared<Dict_object>();
+        type = make_shared<Name_object>(Name_object("Catalog"));
+        catalog->map["Type"] = type;
+        auto c = make_shared<Reference>();
         c->ref_no = pages_no;
         c->gen_no = 0;
-        catalog.map[Name_object("Pages")] = c;
+        catalog->map["Pages"] = c;
 
         pos = pdf.size();
         obj_loc[cur_obj] = pos;
         append(pdf, to_string(cur_obj));
         append(pdf, " 0 obj\n");
-        append(pdf, catalog.serialize());
+        append(pdf, catalog->serialize());
         append(pdf, "\nendobj\n");
 
         int startxref = pdf.size();
@@ -216,12 +216,12 @@ private:
         append(pdf, "trailer\n");
 
         Dict_object trailer;
-        trailer.map[Name_object("Size")] = new Single_object(cur_obj);
+        trailer.map["Size"] = make_shared<Single_object>(Single_object(cur_obj));
 
-        Reference* r = new Reference;
+        auto r = make_shared<Reference>();
         r->ref_no = cur_obj;
         r->gen_no = 0;
-        trailer.map[Name_object("Root")] = r;
+        trailer.map["Root"] = r;
 
         append(pdf, trailer.serialize());
         append(pdf, "startxref\n");
@@ -234,22 +234,23 @@ private:
         return pdf;
     }
 
-    void add_pages(Dict_object* root, vector<Pdf_page>& pages) {
-        auto root_type = ((Name_object*)(root->get("Type")))->name;
+    void add_pages(shared_ptr<Dict_object> root, vector<Pdf_page>& pages) {
+        auto root_type = static_pointer_cast<Name_object>((root->get("Type")))->name;
         if(root_type == "Page") {
-            root->map.erase(Name_object("Parent"));
+            root->map.erase("Parent");
             
             //Annots entry is being removed to remove circular reference to page
             //TODO: Fix circular depedence issue on page serializing
-            root->map.erase(Name_object("Annots"));
+            root->map.erase("Annots");
 
             pages.push_back(Pdf_page(ref_table, *root));
             return;
         }
         else if(root_type == "Pages") {
-            auto kids = (Array_object*)root->get("Kids");
+            auto kids = static_pointer_cast<Array_object>(root->get("Kids"));
             for(auto kid: kids->list) {
-                auto node = (Dict_object*)(((Reference*)kid)->deref(ref_table));
+                auto ref = static_pointer_cast<Reference>(kid);
+                auto node = static_pointer_cast<Dict_object>((ref->deref(ref_table)));
                 add_pages(node, pages);
             }
             return;
@@ -277,7 +278,7 @@ private:
 
     void parse_obj_and_trailer() {
         validate_pdf_header();
-        ref_table = make_shared<unordered_map<int, Object*>>();
+        ref_table = make_shared<unordered_map<int, shared_ptr<Object>>>();
 
         Idx i = 0;
         parse_indirect_objects(pdf_data, i);
@@ -287,7 +288,7 @@ private:
             tok = n.read_next_tok();
         }
 
-        trailer = Dict_object::parse(pdf_data, i);
+        trailer = *Dict_object::parse(pdf_data, i);
     }
 
     void validate_pdf_header() {
@@ -299,8 +300,10 @@ private:
     }
 
     void construct_page_list() {
-        catalog = *(Dict_object*)trailer.get_deref("Root", ref_table);
-        Dict_object* pages_root = (Dict_object*)catalog.get_deref("Pages", ref_table);
+        auto catalog_obj = trailer.get_deref("Root", ref_table);
+
+        catalog = *static_pointer_cast<Dict_object>(catalog_obj);
+        auto pages_root = static_pointer_cast<Dict_object>(catalog.get_deref("Pages", ref_table));
 
         add_pages(pages_root, pages);
     };
